@@ -1,0 +1,36 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+
+<div class="index-main">
+    <div class="content px-4">
+        @Body
+    </div>
+</div>
+
+@code
+{
+    /// <summary>
+    /// Private property for AuthenticationState task.
+    /// 
+    /// Source:
+    /// SAINTY, Chris, 2019. Authentication with client-side Blazor using WebAPI and ASP.NET Core Identity. Chris Sainty [online]. [vid. 2021-04-29]. Dostupné z: https://chrissainty.com/securing-your-blazor-apps-authentication-with-clientside-blazor-using-webapi-aspnet-core-identity/
+    /// </summary>
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthenticationState authState = await authenticationStateTask;
+        int res = -2;
+        if (ClaimsHelper.Instance().GetExpirationClaim() != null)
+        {
+            DateTime tokenExpirationDate = new DateTime(1970, 1, 1);
+            tokenExpirationDate = tokenExpirationDate.AddSeconds(Convert.ToInt32(ClaimsHelper.Instance().GetExpirationClaim().Value) + 1);
+            res = DateTime.Compare(tokenExpirationDate, DateTime.Now);
+        }
+        if (authState.User.Identity.IsAuthenticated && res > 0)
+        {
+            NavigationManager.NavigateTo("/formcapture/apps");
+        }
+    }
+}

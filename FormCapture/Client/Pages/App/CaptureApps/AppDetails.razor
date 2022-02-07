@@ -1,0 +1,356 @@
+﻿@layout AppLayout
+@inject HttpClient HttpClient
+@inject NavigationManager NavigationManager
+@inject IJSRuntime IJSRuntime
+@page "/formcapture/apps/{appid}"
+
+<AuthorizeView>
+    <Authorized>
+        @if (captureApplication == null)
+        {
+            <p>Loading...</p>
+        }
+        else
+        {
+            <h3>@captureApplication.Name</h3>
+
+            <hr />
+
+            <div class="row">
+                <div class="col">
+                    <div class="card m-1">
+                        <div class="card-header">
+                            <div class="row">
+                                <div class="col">
+                                    <h4><span class="oi oi-info mr-2"></span> App information</h4>
+                                </div>
+                                @if (context.User.IsInRole("Admin"))
+                                {
+                                    <div class="col-1">
+                                        <button class="btn" type="button" data-toggle="modal" data-target="#appEditModal">
+                                            <span class="oi oi-pencil pointer"></span>
+                                        </button>
+                                    </div>
+                                    <div class="col-1">
+                                        <button class="btn" type="button" data-toggle="modal" @onclick="DeleteApp">
+                                            <span class="oi oi-trash pointer"></span>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <ul class="list-group">
+                                <li class="list-group-item">ID: @captureApplication.ID</li>
+                                <li class="list-group-item">Locale: @captureApplication.Locale</li>
+                                <li class="list-group-item">Added: @captureApplication.Added.ToShortDateString()</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="card m-1">
+                        <div class="card-header">
+                            <h4><span class="oi oi-list-rich mr-2"></span> Queue</h4>
+                        </div>
+
+                        <div class="card-body" id="queue-list-container">
+                            <button class="btn btn-success" @onclick="@(e => Navigate($"/formcapture/apps/{captureApplication.ID}/startqueue"))">
+                                <span class="oi oi-play-circle mr-2"></span> Start a new queue
+                            </button>
+
+                            <button class="btn btn-primary mt-2" @onclick="@(e => Navigate($"/formcapture/apps/{captureApplication.ID}/viewqueues"))">
+                                <span class="mr-2">View queues</span> <span class="oi oi-chevron-right"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (context.User.IsInRole("Admin"))
+                {
+                    <div class="w-100"></div>
+
+                    <div class="col">
+                        <div class="card m-1">
+                            <div class="card-header">
+                                <h4><span class="oi oi-image mr-2"></span> Templates</h4>
+                            </div>
+
+                            <div class="card-body" id="templates-list-container">
+                                @if (templates != null)
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <td><b>Name</b></td>
+                                                    <td><b>Added</b></td>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var template in templates)
+                                                {
+                                                    <tr @onclick="@(e => Navigate($"/formcapture/apps/{template.ID}/edittemplate"))">
+                                                        <td>@template.Name</td>
+                                                        <td>@template.Added</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="card-footer">
+                                <button class="btn btn-primary" @onclick="@(e => Navigate($"/formcapture/apps/{captureApplication.ID}/addtemplate"))">
+                                    <span class="oi oi-plus mr-2"></span> Add a template
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col">
+                        <div class="card m-1">
+                            <div class="card-header">
+                                <h4><span class="oi oi-project mr-2"></span> Workflows</h4>
+                            </div>
+
+                            <div class="card-body">
+                                @if (appWorkflows != null)
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <td><b>Name</b></td>
+                                                    <td><b>Associated</b></td>
+                                                    <td><b>Delete</b></td>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var workflow in appWorkflows)
+                                                {
+                                                    <tr>
+                                                        <td @onclick="@(e => Navigate($"/formcapture/workflows/{workflow.WorkflowID}/edit"))">@workflow.WorkflowName</td>
+                                                        <td @onclick="@(e => Navigate($"/formcapture/workflows/{workflow.WorkflowID}/edit"))">@workflow.Added</td>
+                                                        <td @onclick="@(e => DeleteWorkflow(workflow))"><span class="oi oi-trash"></span></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="card-footer">
+                                <button class="btn btn-primary" @onclick="@(e => Navigate($"/formcapture/apps/{captureApplication.ID}/addworkflow"))">
+                                    <span class="oi oi-plus mr-2"></span> Associate a workflow
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-100"></div>
+
+                    <div class="col">
+                        <div class="card m-1">
+                            <div class="card-header">
+                                <h4><span class="oi oi-people mr-2"></span> Users</h4>
+                            </div>
+                            <div class="card-body" id="app-details-users-body">
+                                <button class="btn btn-success mr-3" @onclick="@(e => Navigate($"/formcapture/apps/{captureApplication.ID}/add/users"))">
+                                    <span class="oi oi-plus mr-2"></span> Add users
+                                </button>
+
+                                <button class="btn btn-primary" @onclick="@(e => Navigate($"/formcapture/apps/{captureApplication.ID}/users"))">
+                                    <span class="mr-2">View users</span> <span class="oi oi-chevron-right"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <div id="appEditModal" class="modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        @if (captureApplication == null)
+                        {
+                            <h5 class="modal-title" id="appEditModal">Loading...</h5>
+                        }
+                        else
+                        {
+                            <h5 class="modal-title" id="appEditModal">Edit '@captureApplication.Name' app</h5>
+                        }
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="app-name">Application name:</label>
+                            <input type="text" @bind="newAppName" id="app-name" name="app-name" placeholder="Application name..." class="form-control" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lang-codes">Capture language:</label>
+                            <select @bind="appLocale" class="form-control" id="lang-codes" name="lang-codes">
+                                <option value="eng">en-US</option>
+                                <option value="ces">cz-CS</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" @onclick="ConfirmChanges" data-dismiss="modal"><span class="oi oi-check mr-2"></span> Save changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="toast-area mt-2">
+            <div class="alert alert-success alert-dismissible fade show d-none" id="app-updated-toast" role="alert">
+                <strong class="mr-auto">Capture application updated</strong>
+                <hr />
+                <p>Capture application has been successfully updated.</p>
+                <button type="button" class="close" onclick="closeAlert('app-updated-toast');" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+
+            <div class="alert alert-danger alert-dismissible fade show d-none" id="app-error-toast" role="alert">
+                <strong class="mr-auto">Form error</strong>
+                <hr />
+                <p>Form for updating the app contained an error.</p>
+                <button type="button" class="close" onclick="closeAlert('app-error-toast');" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        </div>
+    </Authorized>
+
+    <NotAuthorized>
+        <h3>You are not authorized to access this page.</h3>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code
+{
+    [Parameter]
+    public string AppID { get; set; }
+
+    private CaptureApplication captureApplication;
+
+    private string appLocale;
+
+    private string newAppName;
+
+    private List<Template> templates;
+
+    private List<CaptureAppWorkflows> appWorkflows;
+
+    private List<Queue> queues;
+
+    private void Navigate(string page)
+    {
+        NavigationManager.NavigateTo(page);
+    }
+
+    private async Task DeleteWorkflow(CaptureAppWorkflows captureAppWorkflow)
+    {
+        var res = await IJSRuntime.InvokeAsync<bool>("confirmDialog", $"Do you want to delete association between this app and '{captureAppWorkflow.WorkflowName}'?");
+        if (res)
+        {
+            var deleteWorkflowResponse = await HttpClient.PostAsJsonAsync("api/captureappworkflows/delete", new List<CaptureAppWorkflows> { captureAppWorkflow });
+            if (deleteWorkflowResponse.IsSuccessStatusCode)
+            {
+                appWorkflows.Remove(captureAppWorkflow);
+            }
+        }
+    }
+
+    private async Task DeleteApp()
+    {
+        if (captureApplication != null)
+        {
+            var res = await IJSRuntime.InvokeAsync<bool>("confirmDialog", $"Do you want to delete '{captureApplication.Name}' app?");
+            if (res)
+            {
+                var getAppUsersIdsResponse = await HttpClient.GetAsync($"api/userapps/{captureApplication.ID}");
+                if (getAppUsersIdsResponse.IsSuccessStatusCode)
+                {
+                    var userApps = JsonConvert.DeserializeObject<List<UserApps>>(await getAppUsersIdsResponse.Content.ReadAsStringAsync());
+                    var deleteWorkflowResponse = await HttpClient.PostAsJsonAsync("api/captureappworkflows/delete", appWorkflows);
+                    var deleteTemplatesResponse = await HttpClient.PostAsJsonAsync("api/templates/deletemultiple", templates);
+                    var deleteCaptureAppResponse = await HttpClient.PostAsJsonAsync("api/captureapps/delete", captureApplication);
+                    var deleteFieldsResponse = await HttpClient.PostAsJsonAsync("api/fields/deletewithtemplates", templates);
+                    var deleteUserAppsResponse = await HttpClient.PostAsJsonAsync("api/userapps/delete", userApps);
+                    if (deleteWorkflowResponse.IsSuccessStatusCode && deleteTemplatesResponse.IsSuccessStatusCode && deleteCaptureAppResponse.IsSuccessStatusCode && deleteFieldsResponse.IsSuccessStatusCode && deleteUserAppsResponse.IsSuccessStatusCode)
+                    {
+                        Navigate("/formcapture/apps");
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task ConfirmChanges()
+    {
+        if (string.IsNullOrEmpty(appLocale))
+        {
+            appLocale = "eng";
+        }
+        if (!string.IsNullOrEmpty(appLocale) && !string.IsNullOrEmpty(newAppName))
+        {
+            captureApplication.Updated = DateTime.Now;
+            captureApplication.Name = newAppName;
+            captureApplication.Locale = appLocale;
+            var temp = await HttpClient.PostAsJsonAsync("api/captureapps/edit", captureApplication);
+            appLocale = "eng";
+            newAppName = string.Empty;
+            await IJSRuntime.InvokeVoidAsync("displayToast", "app-updated-toast");
+        }
+        else
+        {
+            await IJSRuntime.InvokeVoidAsync("displayToast", "app-error-toast");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("bearer", ClaimsHelper.Instance().GetToken());
+        var getAppMessage = await HttpClient.PostAsJsonAsync("api/captureapps/get", AppID);
+        var queueApiMesseage = await HttpClient.GetAsync($"api/queue/{AppID}");
+        if (getAppMessage.IsSuccessStatusCode && queueApiMesseage.IsSuccessStatusCode)
+        {
+            captureApplication = JsonConvert.DeserializeObject<CaptureApplication>(await getAppMessage.Content.ReadAsStringAsync());
+            queues = JsonConvert.DeserializeObject<List<Queue>>(await queueApiMesseage.Content.ReadAsStringAsync());
+        }
+        else if (getAppMessage.StatusCode.Equals(System.Net.HttpStatusCode.Unauthorized))
+        {
+            Navigate("/");
+        }
+        if (!ClaimsHelper.Instance().GetRoleClaim().Value.Equals("User"))
+        {
+            var getTemplatesMessage = await HttpClient.GetAsync($"api/templates/{AppID}");
+            var getWorkflowsMessage = await HttpClient.GetAsync($"api/captureappworkflows/{AppID}");
+            if (getTemplatesMessage.IsSuccessStatusCode && getWorkflowsMessage.IsSuccessStatusCode)
+            {
+
+                templates = JsonConvert.DeserializeObject<List<Template>>(await getTemplatesMessage.Content.ReadAsStringAsync());
+                appWorkflows = JsonConvert.DeserializeObject<List<CaptureAppWorkflows>>(await getWorkflowsMessage.Content.ReadAsStringAsync());
+
+            }
+            else if (getTemplatesMessage.StatusCode.Equals(System.Net.HttpStatusCode.Unauthorized))
+            {
+                Navigate("/");
+            }
+        }
+    }
+}

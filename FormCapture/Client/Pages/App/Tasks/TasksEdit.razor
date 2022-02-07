@@ -1,0 +1,129 @@
+﻿@layout AppLayout
+@inject HttpClient HttpClient
+@inject NavigationManager NavigationManager
+@inject IJSRuntime IJSRuntime
+@page "/formcapture/tasks/edit/{taskID}"
+
+<AuthorizeView Roles="Admin, Workflow admin">
+    <Authorized>
+        @if (workflowTask != null)
+        {
+            <h3><span class="oi oi-pencil mr-2"></span> Edit @workflowTask.Name</h3>
+        }
+        else
+        {
+            <h3>Loading...</h3>
+        }
+
+        <hr />
+
+        <div>
+            <div class="form-group">
+                <label for="task-name"><b>Task name</b>:</label>
+                @if (workflowTask != null)
+                {
+                    <input type="text" name="task-name" id="task-name" placeholder="Enter a task name..." @bind-value="workflowTask.Name" class="form-control" />
+                }
+            </div>
+
+            <div class="form-group">
+                <label for="task-description"><b>Task description</b>:</label>
+                @if (workflowTask != null)
+                {
+                    <input type="text" name="task-description" id="task-description" placeholder="Enter a task description..." @bind-value="workflowTask.Description" class="form-control" />
+                }
+            </div>
+
+            <div class="form-group">
+                <label for="task-content"><b>Task content</b>: <a title="Information"><span class="oi oi-question-mark"></span></a></label>
+                <textarea @bind="taskContent" placeholder="Enter task content..." name="task-content" id="task-content" class="form-control">
+                </textarea>
+            </div>
+
+            <div class="form-group">
+                <div class="row">
+                    <div class="col-lg-2 col-sm-6">
+                        <button @onclick="ConfirmForm" class="btn btn-success"><span class="oi oi-check"></span> Confirm</button>
+                    </div>
+
+                    <div class="col-lg-2 col-sm-6">
+                        <button @onclick="TestTaskContent" class="btn btn-warning"><span class="oi oi-beaker"></span> Test task</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="toast-area">
+            <div class="alert alert-danger alert-dismissible fade show d-none" id="task-error-toast" role="alert">
+                <strong class="mr-auto">Form error</strong>
+                <hr />
+                <p>Form for adding apps contained an error.</p>
+                <button type="button" class="close" onclick="closeAlert('task-error-toast');" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        </div>
+
+        @code
+        {
+            [Parameter]
+            public string TaskID { get; set; }
+
+            private WorkflowTask workflowTask;
+
+            /// <summary>
+            /// Page field that contains content of the task.
+            /// </summary>
+            private string taskContent;
+
+            private async Task ConfirmForm()
+            {
+                if (workflowTask != null)
+                {
+                    if (!string.IsNullOrEmpty(taskContent) && !string.IsNullOrEmpty(workflowTask.Name) && !string.IsNullOrEmpty(workflowTask.Description))
+                    {
+                        workflowTask.Content = System.Text.Encoding.UTF8.GetBytes(taskContent);
+                        workflowTask.Updated = DateTime.Now;
+                        var responseMessage = await HttpClient.PostAsJsonAsync("api/tasks/update", workflowTask);
+                        if (responseMessage.IsSuccessStatusCode)
+                        {
+                            NavigationManager.NavigateTo("/formcapture/tasks");
+                        }
+                    }
+                    else
+                    {
+                        await IJSRuntime.InvokeVoidAsync("displayToast", "task-error-toast");
+                    }
+                }
+                else
+                {
+                    await IJSRuntime.InvokeVoidAsync("displayToast", "task-error-toast");
+                }
+            }
+
+            private async void TestTaskContent()
+            {
+                await IJSRuntime.InvokeVoidAsync("executeJS", taskContent);
+            }
+
+            protected override async Task OnInitializedAsync()
+            {
+                HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("bearer", ClaimsHelper.Instance().GetToken());
+                var taskApiResponse = await HttpClient.GetAsync($"/api/tasks/get/{TaskID}");
+                if (taskApiResponse.IsSuccessStatusCode)
+                {
+                    workflowTask = JsonConvert.DeserializeObject<WorkflowTask>(await taskApiResponse.Content.ReadAsStringAsync());
+                    taskContent = System.Text.Encoding.UTF8.GetString(workflowTask.Content);
+                }
+                else if (taskApiResponse.StatusCode.Equals(System.Net.HttpStatusCode.Unauthorized))
+                {
+                    NavigationManager.NavigateTo("/");
+                }
+            }
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <h3>You are not authorized to access this page.</h3>
+    </NotAuthorized>
+</AuthorizeView>

@@ -1,0 +1,213 @@
+﻿@layout AppLayout
+@inject HttpClient HttpClient
+@inject NavigationManager NavigationManager
+@inject IJSRuntime IJsRuntime
+@page "/formcapture/apps/{appID}/viewqueues"
+
+<AuthorizeView>
+    <Authorized>
+        @if (captureApplication == null)
+        {
+            <h3>Loading...</h3>
+        }
+        else
+        {
+            <h3><span class="oi oi-list-rich"></span> @captureApplication.Name's completed queues</h3>
+        }
+
+        <hr />
+
+        @if (queues != null)
+        {
+            @if (queues.Count > 0)
+            {
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="thead-dark">
+                            <tr>
+                                <td>ID</td>
+                                <td>Owner</td>
+                                <td>Added</td>
+                                <td>Export</td>
+                                <td>Delete</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var queue in queues.Where(i => i.Status.Equals(QueueStatus.Finished)))
+                            {
+                                <tr>
+                                    <td>@queue.ID</td>
+                                    <td>@queue.UserID</td>
+                                    <td>@queue.Added</td>
+                                    <td class="td-hover" data-toggle="modal" data-target="#exportModal" @onclick="@(e => SelectQueue(queue))"><span class="oi oi-data-transfer-download"></span></td>
+                                    <td class="td-hover" @onclick="@(e => DeleteQueue(queue))"><span class="oi oi-trash"></span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p>There are no queues.</p>
+            }
+            <div class="d-flex justify-content-center">
+                <div class="spinner-border text-primary @LoadingIndicatorCssClass" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+            </div>
+        }
+
+        <div class="toast-area">
+            <div class="alert alert-info alert-dismissible fade show d-none" id="queue-deleted-toast" role="alert">
+                <strong class="mr-auto">Queue deleted</strong>
+                <hr />
+                <p>Queue has been deleted.</p>
+                <button type="button" class="close" onclick="closeAlert('queue-deleted-toast');" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="modal" id="exportModal" aria-labelledby="exportModal" aria-hidden="true" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><span class="oi oi-data-transfer-download mr-2"></span> Export data from a queue</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="@ModalLinksCssClass">
+                            <div class="row pl-3">
+                                <a id="csvDownloadLink" class="btn btn-success" download="FormCapture_StandardCSV.csv">Download data as CSV</a>
+                            </div>
+                            <div class="row pl-3 mt-3">
+                                <a id="msCsvDownloadLink" class="btn btn-success" download="FormCapture_MicrosoftCSV.csv">Download data as CSV for MS Excel</a>
+                            </div>
+                            <div class="row pl-3 mt-3">
+                                <a id="jsonDownloadLink" class="btn btn-success" download="FormCapture_JSON.json">Download data as JSON</a>
+                            </div>
+                        </div>
+                        @if (areModalLinkHidden)
+                        {
+                            <div class="d-flex justify-content-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="sr-only">Loading...</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Authorized>
+
+    <NotAuthorized>
+        <h3>You are not authorized to access this page.</h3>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter]
+    public string AppID { get; set; }
+
+    private CaptureApplication captureApplication;
+
+    private List<Queue> queues;
+
+    private bool isLoadingIndicatorHidden = true;
+
+    private string LoadingIndicatorCssClass => isLoadingIndicatorHidden ? "d-none" : null;
+
+    private List<FieldValue> fieldValues;
+
+    private List<ProcessedFile> files;
+
+    private Dictionary<string, List<FieldValue>> valuesForJsonContent = new Dictionary<string, List<FieldValue>>();
+
+    private bool areModalLinkHidden = true;
+
+    private string ModalLinksCssClass => areModalLinkHidden ? "d-none" : null;
+
+    private async Task SelectQueue(Queue queue)
+    {
+        var processedFilesApiResponse = await HttpClient.GetAsync($"api/processedfiles/{queue.ID}");
+        string csvContent = "";
+        string mscsvContent = "";
+        string jsonContent = "";
+        valuesForJsonContent.Clear();
+        if (processedFilesApiResponse.IsSuccessStatusCode)
+        {
+            files = JsonConvert.DeserializeObject<List<ProcessedFile>>(await processedFilesApiResponse.Content.ReadAsStringAsync());
+            HttpResponseMessage fieldValuesApiResponse;
+            foreach (var file in files)
+            {
+                fieldValuesApiResponse = await HttpClient.GetAsync($"api/fieldvalues/{file.ID}");
+                if (fieldValuesApiResponse.IsSuccessStatusCode)
+                {
+                    fieldValues = JsonConvert.DeserializeObject<List<FieldValue>>(await fieldValuesApiResponse.Content.ReadAsStringAsync());
+                    valuesForJsonContent.Add(file.ID, fieldValues);
+                    csvContent += $"{file.ID},";
+                    foreach (var value in fieldValues)
+                    {
+                        if (fieldValues.Last().Equals(value))
+                        {
+                            csvContent += $"{value.Value}\n";
+                            mscsvContent += $"{value.Value}\n";
+                        }
+                        else
+                        {
+                            csvContent += $"{value.Value},";
+                            mscsvContent += $"{value.Value};";
+                        }
+                    }
+                }
+            }
+            jsonContent = JsonConvert.SerializeObject(valuesForJsonContent);
+            areModalLinkHidden = false;
+        }
+        if (!string.IsNullOrEmpty(csvContent) && !string.IsNullOrEmpty(mscsvContent) && !string.IsNullOrEmpty(jsonContent))
+        {
+            await IJsRuntime.InvokeVoidAsync("downloadValues", csvContent, "csvDownloadLink");
+            await IJsRuntime.InvokeVoidAsync("downloadValues", mscsvContent, "msCsvDownloadLink");
+            await IJsRuntime.InvokeVoidAsync("downloadValues", jsonContent, "jsonDownloadLink");
+        }
+        else
+        {
+            //Display error.
+        }
+    }
+
+    private async Task DeleteQueue(Queue queue)
+    {
+        var deleteQueueResponse = await HttpClient.PostAsJsonAsync("api/queue/delete", queue);
+        var deleteFieldValuesResponse = await HttpClient.PostAsJsonAsync("api/fieldvalues/delete", queue.ID);
+        var deleteProcessedFilesResponse = await HttpClient.PostAsJsonAsync("api/processedfiles/delete", queue.ID);
+        if (deleteQueueResponse.IsSuccessStatusCode && deleteProcessedFilesResponse.IsSuccessStatusCode && deleteFieldValuesResponse.IsSuccessStatusCode)
+        {
+            queues.Remove(queue);
+            await IJsRuntime.InvokeVoidAsync("displayToast", "queue-deleted-toast");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoadingIndicatorHidden = !isLoadingIndicatorHidden;
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("bearer", ClaimsHelper.Instance().GetToken());
+        var getAppMessage = await HttpClient.PostAsJsonAsync("api/captureapps/get", AppID);
+        var getQueuesResponse = await HttpClient.GetAsync($"api/queue/{AppID}");
+        if (getAppMessage.IsSuccessStatusCode && getQueuesResponse.IsSuccessStatusCode)
+        {
+            captureApplication = JsonConvert.DeserializeObject<CaptureApplication>(await getAppMessage.Content.ReadAsStringAsync());
+            queues = JsonConvert.DeserializeObject<List<Queue>>(await getQueuesResponse.Content.ReadAsStringAsync());
+        }
+        else if (getAppMessage.StatusCode.Equals(System.Net.HttpStatusCode.Unauthorized))
+        {
+            NavigationManager.NavigateTo("/");
+        }
+        isLoadingIndicatorHidden = !isLoadingIndicatorHidden;
+    }
+}

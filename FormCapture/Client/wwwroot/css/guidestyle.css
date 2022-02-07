@@ -1,0 +1,30 @@
+@import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
+
+html, body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.container-main {
+    margin: 0 auto;
+    width: 90%;
+}
+
+.hr-main {
+    background-color: black;
+    height: 3px !important;
+    border-radius: 7px;
+}
+
+.blue {
+    color: rgba(59,94,186,1);
+}
+
+img {
+    box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+}
+
+@media screen and (min-width: 1000px) {
+    .container-main {
+        width: 60%;
+    }
+}

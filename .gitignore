@@ -1,0 +1,23 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/FormCapture/.vs/FormCapture/v16
+/FormCapture/Client/obj
+/FormCapture/Server/obj
+/FormCapture/Shared/obj
+/FormCapture/Client/bin/Debug/netstandard2.1
+/FormCapture/Server/bin/Debug/netcoreapp3.1
+/FormCapture/Shared/bin/Debug/netstandard2.1
+/FormCapture/.vs/FormCapture/config
+/FormCapture/.vs/FormCapture/DesignTimeBuild
+/FormCapture/Server/bin/Debug/net5.0
+/.vs
+/FormCapture/Client/bin/Debug/net5.0
+/FormCapture/Client/FormCapture.Client.csproj.user
+/FormCapture/Client/bin/Release/net5.0
+/FormCapture/Server/bin/Release/net5.0
+/FormCapture/Server/Properties/PublishProfiles
+/FormCapture/Server/FormCapture.Server.csproj.user
+/FormCapture/Shared/bin/Release/netstandard2.1
+/FormCapture/Server/Properties/ServiceDependencies/FormCaptureServer - Web Deploy/profile.arm.json

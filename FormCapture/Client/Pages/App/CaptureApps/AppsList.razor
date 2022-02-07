@@ -1,0 +1,252 @@
+﻿@layout AppLayout
+@inject HttpClient HttpClient
+@inject NavigationManager NavigationManager
+@inject IJSRuntime IJSRuntime
+@page "/formcapture/apps"
+
+<h3><span class="oi oi-aperture mr-1"></span> Apps</h3>
+
+<hr />
+
+<!--Admins's apps-->
+<AuthorizeView Roles="Admin, Workflow admin">
+    <Authorized>
+        <div class="row">
+            <div class="col-lg-2 col-sm-6">
+                <button class="btn btn-success" data-toggle="modal" data-target="#add-app-dialog"><span class="oi oi-plus"></span> Add a new app</button>
+            </div>
+        </div>
+
+        <div>
+            <br />
+            <h4><span class="oi oi-list"></span> Your apps</h4>
+            @if (captureApplications == null)
+            {
+                <p>Loading...</p>
+            }
+            else
+            {
+                @if (captureApplications.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <td>Name</td>
+                                    <td>Locale</td>
+                                    <td>Added</td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (CaptureApplication application in captureApplications)
+                                {
+                                    <tr>
+                                        <td @onclick="@(e => Navigate($"/formcapture/apps/{application.ID}"))">@application.Name</td>
+                                        <td @onclick="@(e => Navigate($"/formcapture/apps/{application.ID}"))">@application.Locale</td>
+                                        <td @onclick="@(e => Navigate($"/formcapture/apps/{application.ID}"))">@application.Added</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else if (isLoadingIndicatorHidden)
+                {
+                    <p>No capture applications has been created yet.</p>
+                }
+                <div class="d-flex justify-content-center">
+                    <div class="spinner-border text-primary @LoadingIndicatorCssClass" role="status">
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!--Modal for adding apps-->
+        <div class="modal" id="add-app-dialog" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Add a new capture app</h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="app-name">Application name:</label>
+                            <input type="text" @bind="appName" id="app-name" name="app-name" placeholder="Application name..." class="form-control" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lang-codes">Capture language:</label>
+                            <select @bind="appLocale" class="form-control" id="lang-codes" name="lang-codes">
+                                <option value="eng">en-US</option>
+                                <option value="ces">cz-CS</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-success" @onclick="ConfirmModal" data-dismiss="modal"><span class="oi oi-check"></span> Confirm</button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal"><span class="oi oi-x"></span> Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr />
+    </Authorized>
+</AuthorizeView>
+
+<!--Block for apps that user is part of-->
+<div>
+    <h4><span class="oi oi-chevron-bottom"></span> Apps that you are part of</h4>
+    @if (userApps != null)
+    {
+        @if (userApps.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-dark">
+                        <tr>
+                            <td>Name</td>
+                            <td>Added to app</td>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var userApp in userApps)
+                        {
+                            <tr>
+                                <td @onclick="@(e => Navigate($"/formcapture/apps/{userApp.ApplicationID}"))">@userApp.ApplicationName</td>
+                                <td @onclick="@(e => Navigate($"/formcapture/apps/{userApp.ApplicationID}"))">@userApp.Added</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <p>You are not a part of any capture application.</p>
+        }
+    }
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border text-primary @LoadingIndicatorCssClass" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<div class="toast-area">
+    <div class="alert alert-success alert-dismissible fade show d-none" id="app-added-toast" role="alert">
+        <strong class="mr-auto">Capture application added</strong>
+        <hr />
+        <p>Capture application has been successfully added.</p>
+        <button type="button" class="close" onclick="closeAlert('app-added-toast');" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+
+    <div class="alert alert-danger alert-dismissible fade show d-none" id="app-error-toast" role="alert">
+        <strong class="mr-auto">Form error</strong>
+        <hr />
+        <p>Form for adding apps contained an error.</p>
+        <button type="button" class="close" onclick="closeAlert('app-error-toast');" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+</div>
+
+@code
+{
+    private CaptureApplication captureApplication;
+
+    /// <summary>
+    /// Field with all user's apps.
+    /// </summary>
+    private List<CaptureApplication> captureApplications = new List<CaptureApplication>();
+
+    /// <summary>
+    /// Field with a capture application name.
+    /// </summary>
+    private string appName;
+
+    /// <summary>
+    /// Field with with a capture application locale.
+    /// </summary>
+    private string appLocale;
+
+    private bool isLoadingIndicatorHidden = true;
+
+    private string LoadingIndicatorCssClass => isLoadingIndicatorHidden ? "d-none" : null;
+
+    private List<UserApps> userApps;
+
+    private void Navigate(string page)
+    {
+        NavigationManager.NavigateTo(page);
+    }
+
+    /// <summary>
+    /// Method for confirming modal form for adding a new capture application.
+    /// </summary>
+    private async Task ConfirmModal()
+    {
+        if (string.IsNullOrEmpty(appLocale))
+        {
+            appLocale = "eng";
+        }
+        if (!string.IsNullOrEmpty(appName) && !string.IsNullOrEmpty(appLocale))
+        {
+            captureApplication = new CaptureApplication();
+            captureApplication.ID = Guid.NewGuid().ToString();
+            captureApplication.Added = DateTime.Now;
+            captureApplication.Updated = captureApplication.Added;
+            captureApplication.Name = appName;
+            captureApplication.Locale = appLocale;
+            captureApplication.UserID = ClaimsHelper.Instance().GetEmailClaim().Value;
+
+            var temp = await HttpClient.PostAsJsonAsync("api/captureapps/add", captureApplication);
+            if (temp.IsSuccessStatusCode)
+            {
+                captureApplications.Add(captureApplication);
+            }
+            appName = string.Empty;
+            appLocale = "eng";
+            await IJSRuntime.InvokeVoidAsync("displayToast", "app-added-toast");
+        }
+        else
+        {
+            await IJSRuntime.InvokeVoidAsync("displayToast", "app-error-toast");
+        }
+    }
+
+    /// <summary>
+    /// Override of OnInitializedAsync() method.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        isLoadingIndicatorHidden = !isLoadingIndicatorHidden;
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("bearer", ClaimsHelper.Instance().GetToken());
+        var getAppUsersIdsResponse = await HttpClient.GetAsync($"api/userapps/user/{ClaimsHelper.Instance().GetEmailClaim().Value}");
+        if (getAppUsersIdsResponse.IsSuccessStatusCode)
+        {
+            userApps = JsonConvert.DeserializeObject<List<UserApps>>(await getAppUsersIdsResponse.Content.ReadAsStringAsync());
+        }
+        if (!ClaimsHelper.Instance().GetRoleClaim().Value.Equals("User"))
+        {
+            var temp = await HttpClient.PostAsJsonAsync<string>("api/captureapps/", ClaimsHelper.Instance().GetEmailClaim().Value);
+            if (temp.IsSuccessStatusCode)
+            {
+                captureApplications = JsonConvert.DeserializeObject<List<CaptureApplication>>(await temp.Content.ReadAsStringAsync());
+            }
+            else if (temp.StatusCode.Equals(System.Net.HttpStatusCode.Unauthorized))
+            {
+                Navigate("/");
+            }
+        }
+        isLoadingIndicatorHidden = !isLoadingIndicatorHidden;
+    }
+}

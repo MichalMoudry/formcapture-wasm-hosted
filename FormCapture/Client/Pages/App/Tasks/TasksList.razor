@@ -1,0 +1,109 @@
+﻿@layout AppLayout
+@inject HttpClient HttpClient
+@inject NavigationManager NavigationManager
+@inject IJSRuntime IJSRuntime
+@page "/formcapture/tasks"
+
+<AuthorizeView Roles="Admin, Workflow admin">
+    <Authorized>
+        <h3><span class="oi oi-code"></span> Tasks</h3>
+
+        <hr />
+
+        <div class="row">
+            <div class="col col-lg-2 col-sm-6">
+                <button class="btn btn-success" @onclick="@(e => Navigate("/formcapture/tasks/add"))"><span class="oi oi-plus"></span> Add a new task</button>
+            </div>
+        </div>
+
+        <div>
+            <br />
+            @if (tasks == null)
+            {
+                <p>Loading...</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-dark">
+                            <tr>
+                                <td>Name</td>
+                                <td>Added</td>
+                                <td>Edit</td>
+                                <td>Delete</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (WorkflowTask task in tasks)
+                            {
+                                <tr class="pointer">
+                                    <td @onclick="@(e => Navigate($"/formcapture/tasks/edit/{task.ID}"))">@task.Name</td>
+                                    <td @onclick="@(e => Navigate($"/formcapture/tasks/edit/{task.ID}"))">@task.Added</td>
+                                    <td @onclick="@(e => Navigate($"/formcapture/tasks/edit/{task.ID}"))"><span class="oi oi-pencil"></span></td>
+                                    <td @onclick="@(e => DeleteTask(task))"><span class="oi oi-trash"></span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="toast-area mt-3">
+            <div class="alert alert-success alert-dismissible fade show d-none" id="task-deleted-toast" role="alert">
+                <strong class="mr-auto">Task deleted</strong>
+                <hr />
+                <p>Task has been successfully deleted.</p>
+                <button type="button" class="close" onclick="closeAlert('task-deleted-toast');" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        </div>
+
+        @code
+        {
+            /// <summary>
+            /// Field that contains all user's tasks.
+            /// </summary>
+            private List<WorkflowTask> tasks;
+
+            private void Navigate(string page)
+            {
+                NavigationManager.NavigateTo(page);
+            }
+
+            private async Task DeleteTask(WorkflowTask task)
+            {
+                var res = await IJSRuntime.InvokeAsync<bool>("confirmDialog", $"Do you want to delete '{task.Name}' task?");
+                if (res)
+                {
+                    var deleteTaskResponse = await HttpClient.PostAsJsonAsync("api/tasks/delete", task);
+                    var deleteTaskGroupingResponse = await HttpClient.DeleteAsync($"api/workflowtaskgrouping/{task.ID}");
+                    if (deleteTaskResponse.IsSuccessStatusCode && deleteTaskGroupingResponse.IsSuccessStatusCode)
+                    {
+                        tasks.Remove(task);
+                        await IJSRuntime.InvokeVoidAsync("displayToast", "task-deleted-toast");
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Override of OnInitializedAsync() method.
+            /// </summary>
+            protected override async Task OnInitializedAsync()
+            {
+                HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("bearer", ClaimsHelper.Instance().GetToken());
+                var responseMessage = await HttpClient.GetAsync($"api/tasks/{ClaimsHelper.Instance().GetEmailClaim().Value}");
+                if (responseMessage.IsSuccessStatusCode)
+                {
+                    tasks = JsonConvert.DeserializeObject<List<WorkflowTask>>(await responseMessage.Content.ReadAsStringAsync());
+                }
+            }
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <h3>You are not authorized to access this page.</h3>
+    </NotAuthorized>
+</AuthorizeView>
